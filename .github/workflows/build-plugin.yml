@@ -181,8 +181,10 @@ jobs:
 
           LTO_FLAG=""
           if [[ "${{ github.event.inputs.lto }}" = "auto" && "${{ matrix.target-type }}" = "template_release" ]]; then
-            if [[ "${{ matrix.target.platform }}" = "linux" || "${{ matrix.target.platform }}" = "windows" || "${{ matrix.target.platform }}" = "macos" || "${{ matrix.target.platform }}" = "android" || "${{ matrix.target.platform }}" = "ios" ]]; then
+            if [[ "${{ matrix.target.platform }}" = "linux" || "${{ matrix.target.platform }}" = "macos" || "${{ matrix.target.platform }}" = "android" || "${{ matrix.target.platform }}" = "ios" ]]; then
               LTO_FLAG=" lto=auto"
+            elif [[ "${{ matrix.target.platform }}" = "windows" ]]; then
+              echo "WARNING: LTO disabled for Windows - MinGW's ld fails to resolve godot-cpp symbols across LTO partitions when linked against the static godot-cpp archive (undefined references to godot::* in a *.ltrans*.ltrans.o chunk), on every Windows architecture."
             elif [[ "${{ matrix.target.platform }}" = "web" ]]; then
               if [[ "${{ matrix.target.threads }}" = "no" ]]; then
                 LTO_FLAG=" lto=auto"
