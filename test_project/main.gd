@@ -1,52 +1,37 @@
 extends Node2D
 
-func _ready() -> void:
-	test_plugin_functionality()
+"""D://Monjolo Project//backup//Characters//Meninos//Menino.fbx
+D://Monjolo Project//Source//Characters//Caramelo//SKM_Caramelo.fbx
+"""
 
-func test_plugin_functionality()->void:
-	var my_res:ItemData = ItemData.new()
-	
-	print(my_res.name)
-	my_res.name = "Sword"
-	print(my_res.name)
-	
-	print(my_res.price)
-	
-	var nums:Array[int] = my_res.create_10k_numbers(5, 10)
-	print(nums)
-	
-	print("Spawning stuff..")
-	my_res.spawn_stuff()
-	
-	print("Spawning custom scene..")
-	var custom_scn:PackedScene = preload("res://main.tscn")
-	my_res.spawn_custom_scene(custom_scn)
-	
-	var nodes:Array[Node] = [Node.new(), Node.new()]
-	
-	nodes[0].name = "TestNodeName1"
-	nodes[1].name = "TestNodeName2"
-	
-	print("Print node name")
-	my_res.print_node_name(nodes[0])
-	
-	print("Print resource name")
-	
-	var res:Resource = Resource.new()
-	res.resource_name = "TestResource"
-	
-	my_res.print_resource_name(res)
-	
-	print("Print ALL node names")
-	my_res.print_all_node_names(nodes)
-	
-	my_res.modify_all_node_names_wrong_way(nodes, "RenamedNode")
-	
-	print("Print ALL node names after modification")
-	my_res.print_all_node_names(nodes)
-	
-	
-	
-	
-	
-	
+func _ready() -> void:
+	var fbx := FbxManager.new()
+	var scene := fbx.load_scene("D://Monjolo Project//backup//Characters//Meninos//Menino.fbx")
+	if not scene:
+		return
+
+	print("meshes: ", scene.get_mesh_names())
+
+	var first := scene.get_mesh(0)
+	#print("geometry: ", first.geometry())
+	#print("material: ", first.material())
+	#print("normal: ", first.normal())
+	#print("uv: ", first.uv())
+	#print("skin: ", first.skin())
+	#print("skeleton: ", first.skeleton())
+
+	# load_skeleton() must run before any load_skin() calls below, since load_skin() resolves
+	# each cluster's bone through the Skeleton3D this builds.
+	scene.load_skeleton()
+	print("has_skeleton: ", scene.has_skeleton())
+	if scene.has_skeleton():
+		print("bone_count: ", scene.get_skeleton().get_bone_count())
+
+	# Select which meshes to actually build - here, everything. Skip entries in this
+	# loop (or only call load_geometry() without load_material(), etc.) to import a subset.
+	for mesh_entry in scene.get_meshes().values():
+		mesh_entry.load_geometry()
+		mesh_entry.load_material()
+		mesh_entry.load_skin() # no-op if the mesh isn't skinned
+
+	add_child(scene.import())

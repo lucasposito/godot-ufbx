@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="FbxMeshEntry" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="geometry" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="get_index" qualifiers="const">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="get_loaded_mesh" qualifiers="const">
+			<return type="ArrayMesh" />
+			<description>
+			</description>
+		</method>
+		<method name="get_name" qualifiers="const">
+			<return type="String" />
+			<description>
+			</description>
+		</method>
+		<method name="is_geometry_loaded" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="is_material_loaded" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="is_skin_loaded" qualifiers="const">
+			<return type="bool" />
+			<description>
+			</description>
+		</method>
+		<method name="load_geometry">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="load_material">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="load_skin">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="material" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="normal" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="skeleton" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="skin" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="uv" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

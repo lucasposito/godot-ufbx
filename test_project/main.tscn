@@ -1,6 +1,11 @@
-[gd_scene load_steps=2 format=3 uid="uid://hn8dh5y3yq6a"]
+[gd_scene format=3 uid="uid://hn8dh5y3yq6a"]
 
 [ext_resource type="Script" uid="uid://gscsivoywwwo" path="res://main.gd" id="1_ig7tw"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1394772907]
 script = ExtResource("1_ig7tw")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=340503516]
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=454450584]
+transform = Transform3D(0.92827183, 1.0132579e-08, 0.3719025, 0.08528442, 0.97335124, -0.21287063, -0.3619918, 0.22931933, 0.9035346, 80.22041, 0.80206513, 222.53897)
