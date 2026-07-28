@@ -1,7 +1,5 @@
 [gd_scene format=3 uid="uid://hn8dh5y3yq6a"]
 
-[ext_resource type="Script" uid="uid://gscsivoywwwo" path="res://main.gd" id="1_ig7tw"]
-
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_ig7tw"]
 
 [sub_resource type="Sky" id="Sky_0xm2m"]
@@ -12,14 +10,12 @@ background_mode = 2
 sky = SubResource("Sky_0xm2m")
 
 [node name="Main" type="Node2D" unique_id=1394772907]
-script = ExtResource("1_ig7tw")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=340503516]
-transform = Transform3D(1, 0, 0, 0, 0.4955193, 0.868597, 0, -0.868597, 0.4955193, 33.04361, 384.02515, 398.55618)
-light_energy = 6.667
+transform = Transform3D(0.947003, -0.3182815, 0.043384165, -0.15051366, -0.55897874, -0.81540674, 0.2837797, 0.7656627, -0.57726026, 6.085684, 5.582609, 6.909523)
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=454450584]
-transform = Transform3D(1, 0, 0, 0, 0.98678803, 0.1620172, 0, -0.1620172, 0.98678803, 0, 1.6, 4)
+transform = Transform3D(0.9245394, 0.061742563, -0.37605157, 3.5143177e-09, 0.986788, 0.1620172, 0.38108653, -0.14979127, 0.9123243, -1.1857315, 1.481235, 3.196632)
 fov = 32.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1169192619]
