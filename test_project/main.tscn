@@ -2,10 +2,25 @@
 
 [ext_resource type="Script" uid="uid://gscsivoywwwo" path="res://main.gd" id="1_ig7tw"]
 
+[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_ig7tw"]
+
+[sub_resource type="Sky" id="Sky_0xm2m"]
+sky_material = SubResource("PhysicalSkyMaterial_ig7tw")
+
+[sub_resource type="Environment" id="Environment_h2yge"]
+background_mode = 2
+sky = SubResource("Sky_0xm2m")
+
 [node name="Main" type="Node2D" unique_id=1394772907]
 script = ExtResource("1_ig7tw")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=340503516]
+transform = Transform3D(1, 0, 0, 0, 0.4955193, 0.868597, 0, -0.868597, 0.4955193, 33.04361, 384.02515, 398.55618)
+light_energy = 6.667
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=454450584]
-transform = Transform3D(0.92827183, 1.0132579e-08, 0.3719025, 0.08528442, 0.97335124, -0.21287063, -0.3619918, 0.22931933, 0.9035346, 80.22041, 0.80206513, 222.53897)
+transform = Transform3D(1, 0, 0, 0, 0.98678803, 0.1620172, 0, -0.1620172, 0.98678803, 0, 1.6, 4)
+fov = 32.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1169192619]
+environment = SubResource("Environment_h2yge")
