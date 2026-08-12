@@ -5,6 +5,7 @@
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/standard_material3d.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/templates/vector.hpp>
 
@@ -88,4 +89,10 @@ public:
 	bool is_skin_loaded() const { return skin_loaded; }
 
 	Ref<ArrayMesh> get_loaded_mesh() const;
+	// Godot surface index -> owning FBX material name, e.g. for routing externally-supplied
+	// roughness/metallic/AO textures to the right surface_set_material() call on a multi-material
+	// mesh. Empty until load_geometry() (or load_skin()) has run - same lifetime as
+	// get_loaded_mesh(), since surface indices don't exist before then. Entries are "" for a
+	// surface whose FBX material index doesn't resolve (shouldn't normally happen).
+	PackedStringArray get_surface_material_names() const;
 };

@@ -162,6 +162,23 @@ Ref<ArrayMesh> FbxMeshEntry::get_loaded_mesh() const {
 	return loaded_mesh;
 }
 
+PackedStringArray FbxMeshEntry::get_surface_material_names() const {
+	PackedStringArray names;
+	if (!mesh) {
+		return names;
+	}
+	for (int i = 0; i < surface_material_index.size(); i++) {
+		int material_i = surface_material_index[i];
+		if (material_i >= 0 && (size_t)material_i < mesh->materials.count) {
+			ufbx_string name = mesh->materials.data[material_i]->name;
+			names.push_back(String::utf8(name.data, (int)name.length));
+		} else {
+			names.push_back(String());
+		}
+	}
+	return names;
+}
+
 void FbxMeshEntry::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_name"), &FbxMeshEntry::get_name);
 	ClassDB::bind_method(D_METHOD("get_index"), &FbxMeshEntry::get_index);
@@ -178,4 +195,5 @@ void FbxMeshEntry::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_material_loaded"), &FbxMeshEntry::is_material_loaded);
 	ClassDB::bind_method(D_METHOD("is_skin_loaded"), &FbxMeshEntry::is_skin_loaded);
 	ClassDB::bind_method(D_METHOD("get_loaded_mesh"), &FbxMeshEntry::get_loaded_mesh);
+	ClassDB::bind_method(D_METHOD("get_surface_material_names"), &FbxMeshEntry::get_surface_material_names);
 }
