@@ -1,8 +1,10 @@
 extends Node2D
 
-"""D://Monjolo Project//backup//Characters//Meninos//Menino.fbx
+"""D://Monjolo Project//Source//Characters//Joe//Meshes//SKM_BV_Joe_01.fbx
 D://Monjolo Project//backup//Characters//Meninos//Textures//tx_gianluca_albedo.png
 """
+
+var albedo := []
 
 func _ready() -> void:
 	##### TEST ZONE #####
@@ -40,7 +42,7 @@ func _ready() -> void:
 	var character := scene.import()
 	add_child(character)
 
-	_apply_texture(character, "D://Monjolo Project//backup//Characters//Meninos//Textures//tx_gianluca_albedo.png")
+	#_apply_texture(character, "D://Monjolo Project//backup//Characters//Meninos//Textures//tx_gianluca_albedo.png")
 #
 #
 # This FBX's winding order comes in reversed relative to what Godot's default
