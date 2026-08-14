@@ -6,7 +6,6 @@
         "AStarGrid2D",
         "AnimatableBody2D",
         "AnimatedSprite2D",
-        "Animation",
         "AnimationLibrary",
         "AnimationMixer",
         "AnimationNode",

@@ -1,28 +1,17 @@
 extends Node2D
 
-"""D://Monjolo Project//Source//Characters//Joe//Meshes//SKM_BV_Joe_01.fbx
-D://Monjolo Project//backup//Characters//Meninos//Textures//tx_gianluca_albedo.png
-"""
-
-var albedo := []
+const JOE_MESH_PATH := "D://Monjolo Project//Source//Characters//Joe//Meshes//SKM_BV_Joe_01.fbx"
+const JOE_RUN_ANIM_PATH := "D://Monjolo Project//Source//Characters//Joe//Animations//Joe_Run_01.fbx"
 
 func _ready() -> void:
 	##### TEST ZONE #####
-	
+
 	var fbx := FbxManager.new()
-	var scene := fbx.load_scene("D://Monjolo Project//backup//Characters//Meninos//Menino.fbx")
+	var scene := fbx.load_scene(JOE_MESH_PATH)
 	if not scene:
 		return
 
 	print("meshes: ", scene.get_mesh_names())
-
-	var first := scene.get_mesh(0)
-	#print("geometry: ", first.geometry())
-	#print("material: ", first.material())
-	#print("normal: ", first.normal())
-	#print("uv: ", first.uv())
-	#print("skin: ", first.skin())
-	#print("skeleton: ", first.skeleton())
 
 	# load_skeleton() must run before any load_skin() calls below, since load_skin() resolves
 	# each cluster's bone through the Skeleton3D this builds.
@@ -42,7 +31,39 @@ func _ready() -> void:
 	var character := scene.import()
 	add_child(character)
 
-	#_apply_texture(character, "D://Monjolo Project//backup//Characters//Meninos//Textures//tx_gianluca_albedo.png")
+	_load_and_play_animation(scene, character, JOE_RUN_ANIM_PATH)
+
+
+# Joe's animations ship as separate animation-only FBX files (Mixamo-style "without skin"
+# export) rather than baked into the mesh file, so this loads a second FbxScene just for the
+# bone tracks and plays them against the Skeleton3D built above - the two files only need to
+# agree on bone names, not live in the same FBX. `mesh_scene`'s Skeleton3D is passed into
+# load_animation() so it can tell a real skinned bone from an unused rig control bone (e.g. the
+# "root" bone some rigs put above the topmost skinned bone) when baking track transforms.
+func _load_and_play_animation(mesh_scene: FbxScene, character: Node3D, anim_path: String) -> void:
+	var fbx := FbxManager.new()
+	var anim_scene := fbx.load_scene(anim_path)
+	if not anim_scene:
+		print("failed to load animation: ", anim_path)
+		return
+
+	print("animations: ", anim_scene.get_animation_names())
+	if anim_scene.get_animation_count() == 0:
+		return
+
+	var anim := anim_scene.load_animation(0, 0.0, mesh_scene.get_skeleton())
+	anim.loop_mode = Animation.LOOP_LINEAR
+
+	var library := AnimationLibrary.new()
+	library.add_animation("Run", anim)
+
+	var player := AnimationPlayer.new()
+	player.name = "AnimationPlayer"
+	# Added under `character` (the Skeleton3D's parent) so the animation's "Skeleton3D:<bone>"
+	# track paths resolve against player.get_node("..") like FbxScene::import() built them for.
+	character.add_child(player)
+	player.add_animation_library("", library)
+	player.play("Run")
 #
 #
 # This FBX's winding order comes in reversed relative to what Godot's default

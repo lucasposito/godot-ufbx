@@ -4,7 +4,12 @@
 
 #include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/node_path.hpp>
+#include <godot_cpp/variant/quaternion.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+
+#include <algorithm>
+#include <cmath>
 
 using namespace godot;
 using namespace fbx_convert;
@@ -198,6 +203,127 @@ void FbxScene::_build_node(ufbx_node *p_node, Node3D *p_parent, Node3D *p_root, 
 	}
 }
 
+int FbxScene::get_animation_count() const {
+	return scene ? (int)scene->anim_stacks.count : 0;
+}
+
+PackedStringArray FbxScene::get_animation_names() const {
+	PackedStringArray names;
+	if (!scene) {
+		return names;
+	}
+	names.resize((int)scene->anim_stacks.count);
+	for (size_t i = 0; i < scene->anim_stacks.count; i++) {
+		ufbx_anim_stack *stack = scene->anim_stacks.data[i];
+		names[(int)i] = String::utf8(stack->name.data, (int)stack->name.length);
+	}
+	return names;
+}
+
+Ref<Animation> FbxScene::load_animation(int p_index, double p_fps, Skeleton3D *p_target_skeleton) const {
+	Ref<Animation> anim;
+	anim.instantiate();
+
+	if (!scene || p_index < 0 || (size_t)p_index >= scene->anim_stacks.count) {
+		UtilityFunctions::printerr("FbxScene: animation index ", p_index, " out of range (",
+				scene ? (int)scene->anim_stacks.count : 0, " animation stacks)");
+		return anim;
+	}
+
+	ufbx_anim_stack *stack = scene->anim_stacks.data[p_index];
+	ufbx_anim *stack_anim = stack->anim;
+
+	double fps = p_fps > 0.0 ? p_fps : scene->settings.frames_per_second;
+	if (fps <= 0.0) {
+		fps = 30.0;
+	}
+
+	double length = stack->time_end - stack->time_begin;
+	if (length < 0.0) {
+		length = 0.0;
+	}
+	anim->set_length(length > 0.0 ? length : (1.0 / fps));
+	anim->set_step(1.0 / fps);
+
+	// +1 so the last sample lands exactly on `length` (a plain length*fps count would stop just
+	// short of the final frame, e.g. a 1s/30fps clip needs samples at frame 30 too, not just 0..29).
+	int frame_count = length > 0.0 ? (int)std::ceil(length * fps) + 1 : 1;
+
+	for (size_t i = 0; i < scene->nodes.count; i++) {
+		ufbx_node *node = scene->nodes.data[i];
+		// Gated on the node's own bone attribute rather than skin-cluster membership (unlike
+		// build_skeleton_bones()): an animation-only export (e.g. Mixamo "without skin") has no
+		// mesh/skin deformer to derive bones from, just the bone hierarchy itself.
+		if (!node->bone) {
+			continue;
+		}
+
+		// Skeleton3D interprets a bone's pose track as relative to its *parent bone*, skipping
+		// any non-bone nodes in between (matching how build_skeleton_bones() sets up
+		// set_bone_rest()) - most bones have a real skeleton bone as their immediate parent so
+		// this is empty, but the topmost bone(s) hang off the scene root, which carries ufbx's
+		// UFBX_SPACE_CONVERSION_TRANSFORM_ROOT axis/unit conversion (see FbxManager::load_scene).
+		// Skipping this chain (as a flat per-node bake would) leaves that conversion's unit scale
+		// out of the baked translation keys, which - since a static rest pose and an animated
+		// pose then disagree on scale only where they differ from each other - is invisible at
+		// the rest frame but throws the bone (and everything skinned to it) wildly out of place
+		// the instant the animation moves it off rest.
+		//
+		// An ancestor only stops the walk if it's an actual bone in p_target_skeleton (when one
+		// was given) - ufbx's `bone` flag alone isn't enough, since rigs commonly have a "root"
+		// control bone above the topmost *skinned* bone that carries no skin weight and so never
+		// made it into build_skeleton_bones()'s Skeleton3D; treating it as a stopping point would
+		// bake the skinned bone below it relative to a parent that doesn't exist in the target
+		// skeleton, instead of relative to the skeleton root like its rest pose is.
+		Vector<ufbx_node *> pending_chain;
+		for (ufbx_node *ancestor = node->parent; ancestor; ancestor = ancestor->parent) {
+			if (ancestor->bone) {
+				String ancestor_name = sanitize_bone_name(String::utf8(ancestor->name.data, (int)ancestor->name.length));
+				bool is_real_bone = p_target_skeleton == nullptr || p_target_skeleton->find_bone(ancestor_name) >= 0;
+				if (is_real_bone) {
+					break;
+				}
+			}
+			pending_chain.push_back(ancestor);
+		}
+		// Reverse to root-first order so the multiply below composes outermost-to-innermost.
+		for (int lo = 0, hi = pending_chain.size() - 1; lo < hi; lo++, hi--) {
+			ufbx_node *tmp = pending_chain[lo];
+			pending_chain.write[lo] = pending_chain[hi];
+			pending_chain.write[hi] = tmp;
+		}
+
+		String bone_name = sanitize_bone_name(String::utf8(node->name.data, (int)node->name.length));
+		NodePath track_path(String("Skeleton3D:") + bone_name);
+
+		int pos_track = anim->add_track(Animation::TYPE_POSITION_3D);
+		anim->track_set_path(pos_track, track_path);
+		int rot_track = anim->add_track(Animation::TYPE_ROTATION_3D);
+		anim->track_set_path(rot_track, track_path);
+		int scale_track = anim->add_track(Animation::TYPE_SCALE_3D);
+		anim->track_set_path(scale_track, track_path);
+
+		for (int f = 0; f < frame_count; f++) {
+			double key_time = length > 0.0 ? std::min((double)f / fps, length) : 0.0;
+			double sample_time = stack->time_begin + key_time;
+
+			Transform3D pending;
+			for (int c = 0; c < pending_chain.size(); c++) {
+				ufbx_transform ancestor_xf = ufbx_evaluate_transform(stack_anim, pending_chain[c], sample_time);
+				pending = pending * ufbx_transform_to_godot(ancestor_xf);
+			}
+			ufbx_transform xf = ufbx_evaluate_transform(stack_anim, node, sample_time);
+			Transform3D effective = pending * ufbx_transform_to_godot(xf);
+
+			anim->position_track_insert_key(pos_track, key_time, effective.origin);
+			anim->rotation_track_insert_key(rot_track, key_time, effective.basis.get_rotation_quaternion());
+			anim->scale_track_insert_key(scale_track, key_time, effective.basis.get_scale());
+		}
+	}
+
+	return anim;
+}
+
 void FbxScene::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_mesh_count"), &FbxScene::get_mesh_count);
 	ClassDB::bind_method(D_METHOD("get_mesh_names"), &FbxScene::get_mesh_names);
@@ -207,4 +333,7 @@ void FbxScene::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("has_skeleton"), &FbxScene::has_skeleton);
 	ClassDB::bind_method(D_METHOD("get_skeleton"), &FbxScene::get_skeleton);
 	ClassDB::bind_method(D_METHOD("import"), &FbxScene::import);
+	ClassDB::bind_method(D_METHOD("get_animation_count"), &FbxScene::get_animation_count);
+	ClassDB::bind_method(D_METHOD("get_animation_names"), &FbxScene::get_animation_names);
+	ClassDB::bind_method(D_METHOD("load_animation", "index", "fps", "target_skeleton"), &FbxScene::load_animation, DEFVAL(0.0), DEFVAL(Variant()));
 }

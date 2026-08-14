@@ -116,10 +116,17 @@ Ref<StandardMaterial3D> build_material(ufbx_material *p_material, const String &
 // starting point. If p_out_surface_material_index is non-null, it is filled with one entry per
 // Godot surface actually created (empty material buckets are skipped), giving that surface's
 // index into p_mesh->materials[] - lets callers attach materials independently and/or later.
-// If p_skin is non-null, ARRAY_BONES/ARRAY_WEIGHTS are also filled per corner: each corner's
-// control point is looked up in p_skin->deformer->vertices[] (already weight-sorted descending
-// by ufbx), the first 4 weights are resolved through p_skin->cluster_to_bone (dropping any
-// that resolve to -1) and renormalized to sum to 1.
+// If p_skin is non-null, ARRAY_BONES/ARRAY_WEIGHTS are also filled per corner (8-wide, with
+// ARRAY_FLAG_USE_8_BONE_WEIGHTS set on the surface - plain 4-wide silently reads this data
+// wrong, not just truncated): each corner's control point is looked up in
+// p_skin->deformer->vertices[] (already weight-sorted descending by ufbx), the first 8 weights
+// are resolved through p_skin->cluster_to_bone (dropping any that resolve to -1) and
+// renormalized to sum to 1. 8 rather than Godot's default 4 because corrective-bone rigs (e.g.
+// UE-style upperarm_fwd/bck/in/out/twist_01/twist_02 helper bones) routinely blend a single
+// vertex across 5+ bones - capping at 4 silently drops whichever influences sort lowest,
+// which for a vertex whose weight is split between a few dominant torso bones and several
+// smaller corrective limb bones means the limb bones vanish entirely, leaving that vertex
+// rigid to the torso while its neighbors correctly follow the limb.
 Ref<ArrayMesh> build_mesh_geometry(ufbx_mesh *p_mesh, Vector<int> *p_out_surface_material_index, const SkinBuildInput *p_skin = nullptr);
 
 // Legacy convenience used by FbxManager::import_scene: build_mesh_geometry() plus an immediate

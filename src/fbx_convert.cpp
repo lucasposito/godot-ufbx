@@ -115,7 +115,25 @@ bool contains_node(const Vector<ufbx_node *> &p_bone_nodes, ufbx_node *p_node) {
 }
 
 // Scene-wide equivalent of walking one mesh's skin_deformers[0]->clusters[] for bone_node
-// (see read_skeleton_data) - every skin cluster's bone, across every mesh in the scene.
+// (see read_skeleton_data) - every skin cluster's bone, across every mesh in the scene - UNIONED
+// with every node ufbx itself classifies as a bone/limb-node (node->bone), skinned or not.
+//
+// The union matters for rigs with real structural joints that carry no skin weight of their
+// own - e.g. a proper upperarm/lowerarm FK chain where only corrective helper bones underneath
+// actually get painted, or Mixamo/UE-style "correctiveRoot" bones that just pass a blended
+// rotation down to real corrective bones. Skin-cluster-only gathering makes
+// build_skeleton_bones() skip these, flattening them into whichever skinned bone is nearest
+// below - fine for a static rest pose (the flattening composes their rest transform forward
+// once), but it forces load_animation() to reconstruct that exact same flattening per animation
+// frame by walking back up through bones that don't exist in the built Skeleton3D. That's
+// fragile and diverges from how every other FBX consumer (Maya, Unreal, ...) handles this: they
+// never throw the full joint hierarchy away in the first place, so animation curves apply
+// directly, joint-to-its-real-parent, with no reconstruction needed. Including every
+// `node->bone` here gives the same full-hierarchy behavior.
+//
+// Kept as a UNION with the skin-cluster-based set, not a replacement, since some exporters -
+// this codebase has seen it from a Mixamo-derived pipeline - leave `node->bone` null even on
+// real skinned joints, so that path is still needed as the ground truth for "must include".
 Vector<ufbx_node *> gather_bone_nodes(ufbx_scene *p_scene) {
 	Vector<ufbx_node *> bone_nodes;
 	for (size_t mesh_i = 0; mesh_i < p_scene->meshes.count; mesh_i++) {
@@ -129,6 +147,12 @@ Vector<ufbx_node *> gather_bone_nodes(ufbx_scene *p_scene) {
 			if (bone_node && !contains_node(bone_nodes, bone_node)) {
 				bone_nodes.push_back(bone_node);
 			}
+		}
+	}
+	for (size_t i = 0; i < p_scene->nodes.count; i++) {
+		ufbx_node *node = p_scene->nodes.data[i];
+		if (node->bone && !contains_node(bone_nodes, node)) {
+			bone_nodes.push_back(node);
 		}
 	}
 	return bone_nodes;
@@ -453,8 +477,16 @@ Ref<ArrayMesh> build_mesh_geometry(ufbx_mesh *p_mesh, Vector<int> *p_out_surface
 				PackedInt32Array &bones = bones_per_surface.write[(int)surface_i];
 				PackedFloat32Array &weights = weights_per_surface.write[(int)surface_i];
 
-				int32_t bone_ids[4] = { 0, 0, 0, 0 };
-				float bone_weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+				// 8 wide, not Godot's default 4: this rig leans on many small-weight corrective
+				// bones per vertex (e.g. a shoulder vertex blending spine_04/spine_03/clavicle_r/
+				// upperarm_fwd_r/upperarm_twist_01_r/... all at once) - capping at 4 was dropping
+				// the vertex's actual arm-side influences in favor of whichever 4 happened to sort
+				// highest (frequently all torso/spine, since those carry the base weight before
+				// the corrective split), leaving that vertex nearly rigid to the spine while its
+				// neighbors correctly followed the arm - the visible symptom being cuff/hem
+				// geometry stretching into a thin blade the instant the arm swings away from rest.
+				int32_t bone_ids[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+				float bone_weights[8] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 				int written = 0;
 				float total = 0.0f;
 
@@ -464,7 +496,7 @@ Ref<ArrayMesh> build_mesh_geometry(ufbx_mesh *p_mesh, Vector<int> *p_out_surface
 				// agree index-for-index, which was scrambling which vertex got which weights.
 				uint32_t control_point = p_mesh->vertex_position.indices.data[index];
 				ufbx_skin_vertex sv = p_skin->deformer->vertices.data[control_point];
-				for (uint32_t w = 0; w < sv.num_weights && written < 4; w++) {
+				for (uint32_t w = 0; w < sv.num_weights && written < 8; w++) {
 					ufbx_skin_weight sw = p_skin->deformer->weights.data[sv.weight_begin + w];
 					if (sw.cluster_index >= (uint32_t)p_skin->cluster_to_bone.size()) {
 						continue;
@@ -483,7 +515,7 @@ Ref<ArrayMesh> build_mesh_geometry(ufbx_mesh *p_mesh, Vector<int> *p_out_surface
 						bone_weights[k] /= total;
 					}
 				}
-				for (int k = 0; k < 4; k++) {
+				for (int k = 0; k < 8; k++) {
 					bones.push_back(bone_ids[k]);
 					weights.push_back(bone_weights[k]);
 				}
@@ -519,7 +551,11 @@ Ref<ArrayMesh> build_mesh_geometry(ufbx_mesh *p_mesh, Vector<int> *p_out_surface
 		if (array_mesh.is_null()) {
 			array_mesh.instantiate();
 		}
-		array_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, surface_arrays);
+		// ARRAY_FLAG_USE_8_BONE_WEIGHTS matches the 8-wide bones/weights arrays built above -
+		// without it Godot interprets ARRAY_BONES/ARRAY_WEIGHTS as the default 4-per-vertex
+		// layout and reads this data completely wrong (not just truncated).
+		BitField<Mesh::ArrayFormat> surface_flags(p_skin ? Mesh::ARRAY_FLAG_USE_8_BONE_WEIGHTS : 0);
+		array_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, surface_arrays, TypedArray<Array>(), Dictionary(), surface_flags);
 
 		if (p_out_surface_material_index) {
 			p_out_surface_material_index->push_back((int)surface_i);
