@@ -64,6 +64,14 @@ public:
 	// Not exposed to GDScript - internal plumbing for FbxMeshEntry::load_skin().
 	int find_bone_index(const String &p_name) const { return built_skeleton ? built_skeleton->find_bone(p_name) : -1; }
 
+	// Debug aid: an indented text dump of the Skeleton3D load_skeleton() built (name only, one
+	// per line, depth = indent level, in the same parent/child structure Skeleton3D itself
+	// reports via get_bone_parent()) - lets a caller diff what build_skeleton_bones() actually
+	// produced against a known-good reference hierarchy (e.g. from Maya/Unreal) without needing
+	// the Godot editor's own bone-tree UI. Empty string if load_skeleton() wasn't called or found
+	// no bones.
+	String debug_skeleton_hierarchy() const;
+
 	// Builds the Node3D tree from whichever meshes have had load_geometry() called. If
 	// load_skeleton() was called first, the built Skeleton3D is parented under the returned
 	// root (transferring ownership to it - calling import() again afterwards will fail to
@@ -86,10 +94,7 @@ public:
 	// Animation stack names, index-aligned with load_animation()'s p_index.
 	PackedStringArray get_animation_names() const;
 	// Bakes animation stack p_index into a standalone Animation resource with one
-	// position/rotation/scale bone track per animated bone node (any ufbx node with a non-null
-	// `bone` attribute - deliberately not gated on skin-cluster membership like
-	// build_skeleton_bones(), since an animation-only FBX export (e.g. Mixamo "without skin")
-	// has a full bone hierarchy but no mesh/skin deformer to derive it from). Each track's path
+	// position/rotation/scale bone track per animated bone node. Each track's path
 	// is "Skeleton3D:<bone_name>" (bone name run through sanitize_bone_name(), matching
 	// build_skeleton_bones()'s naming) so it resolves against any Skeleton3D sibling of the
 	// AnimationPlayer playing it - in particular the "Skeleton3D" node FbxScene::import() builds
@@ -98,17 +103,25 @@ public:
 	// Animation (not null) if the scene has no animation stacks or the index is out of range.
 	//
 	// p_target_skeleton (optional) is the Skeleton3D this animation will actually be played
-	// against - normally the one FbxScene::import() built for the mesh file - and is used purely
-	// to tell a real bone from an unused control/rig-helper node (e.g. Mixamo/UE rigs commonly
-	// have a "root" bone above the actual topmost skinned bone that carries no skin weight and
-	// so is never added to build_skeleton_bones()'s Skeleton3D): when walking up from a bone to
-	// find the nearest ancestor its track should be baked relative to, an ancestor is only
-	// treated as that stopping point if it's also a real bone in p_target_skeleton (checked by
-	// sanitized name), otherwise the walk composes on through it. Without p_target_skeleton, any
-	// `bone`-flagged ancestor stops the walk unconditionally, which mis-bakes bones directly
-	// below such an unused control bone: their translation keys come out in the FBX file's
-	// unconverted native units instead of the target skeleton's (typically meters), so they only
-	// deviate from the (correctly scaled) rest pose once the animation actually moves them -
-	// e.g. a hip/pelvis bone landing tens of meters away from rest the instant a run cycle starts.
+	// against - normally the one FbxScene::import() built for the mesh file - and, when given, is
+	// the sole authority on what counts as a bone: a node gets a track iff p_target_skeleton has
+	// a bone of its sanitized name, and the same test decides which ancestor a track is baked
+	// relative to (the walk composes through every non-bone ancestor and stops at the first real
+	// one). Using it for both is what keeps the two consistent; ufbx's `bone` attribute alone
+	// does not, since build_skeleton_bones() also promotes any node referenced as a skin
+	// cluster's bone_node - a joint skinned through a plain transform node with no FBX "Skeleton"
+	// attribute would land in the Skeleton3D yet get no track (frozen at rest) while still being
+	// composed into its children's tracks as though it moved, throwing limbs wildly off during
+	// playback. It equally covers the reverse case, an unused control/rig-helper node (e.g. the
+	// "root" bone Mixamo/UE rigs put above the topmost skinned bone, carrying no skin weight and
+	// so absent from the Skeleton3D): it's composed through rather than stopping the walk, so the
+	// bone below it is baked relative to the skeleton root like its rest pose is, instead of
+	// leaving translation keys in the FBX's unconverted native units - which would only deviate
+	// from the (correctly scaled) rest pose once the animation moves them, e.g. a hip landing
+	// tens of meters away the instant a run cycle starts.
+	//
+	// Pass nullptr only for an animation-only FBX export (e.g. Mixamo "without skin"), which has
+	// a full bone hierarchy but no mesh/skin deformer to derive a skeleton from; that case falls
+	// back to the `bone` attribute alone for both tests.
 	Ref<Animation> load_animation(int p_index, double p_fps = 0.0, Skeleton3D *p_target_skeleton = nullptr) const;
 };

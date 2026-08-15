@@ -770,7 +770,23 @@ Dictionary read_skeleton_data(ufbx_mesh *p_mesh) {
 
 void build_skeleton_bones(ufbx_scene *p_scene, Skeleton3D *p_skeleton) {
 	Vector<ufbx_node *> bone_nodes = gather_bone_nodes(p_scene);
-	collect_skeleton_bones(p_scene->root_node, bone_nodes, p_skeleton, -1, false, Transform3D(), false);
+	// Starts at root_node's *children*, not root_node itself - mirrors FbxScene::_build_node's
+	// import() loop, which does the same to avoid double-applying root_node's own local_transform
+	// (the axis/unit conversion FbxManager::load_scene bakes into it via
+	// UFBX_SPACE_CONVERSION_TRANSFORM_ROOT). That conversion is applied exactly once, via the
+	// Node3D transform FbxScene::import() sets on its returned root - every other node's
+	// local_transform (bones included) must be left as a "plain copy" relative to that, per the
+	// comment on ufbx_transform_to_godot()/ufbx_matrix_to_godot() below. Composing it a second
+	// time into bone rest here was invisible for a static/unposed skeleton (skin deformation is
+	// pose * rest^-1, and identical rest/pose scale errors cancel in that ratio at bind pose) but
+	// broke skinning the instant a bone rotated away from rest: the skinned mesh's own vertex data
+	// is left in the FBX's native (pre-conversion) units - relying on inheriting this same
+	// conversion once from its parent - so a bone rest doubly-scaled by it no longer agrees with
+	// the vertex data's units, and every rotated bone flings its vertices through a wildly wrong
+	// arc pivoting near the origin instead of the joint.
+	for (size_t i = 0; i < p_scene->root_node->children.count; i++) {
+		collect_skeleton_bones(p_scene->root_node->children.data[i], bone_nodes, p_skeleton, -1, false, Transform3D(), false);
+	}
 }
 
 SkinningSummary summarize_skinning(ufbx_scene *p_scene) {

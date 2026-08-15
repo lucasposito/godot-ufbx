@@ -203,6 +203,47 @@ void FbxScene::_build_node(ufbx_node *p_node, Node3D *p_parent, Node3D *p_root, 
 	}
 }
 
+namespace {
+
+void _append_bone_tree(Skeleton3D *p_skeleton, const Vector<Vector<int>> &p_children, int p_bone, int p_depth, String &p_out) {
+	for (int d = 0; d < p_depth; d++) {
+		p_out += "  ";
+	}
+	p_out += p_skeleton->get_bone_name(p_bone);
+	p_out += "\n";
+	const Vector<int> &kids = p_children[p_bone];
+	for (int i = 0; i < kids.size(); i++) {
+		_append_bone_tree(p_skeleton, p_children, kids[i], p_depth + 1, p_out);
+	}
+}
+
+} //namespace
+
+String FbxScene::debug_skeleton_hierarchy() const {
+	if (!built_skeleton) {
+		return String();
+	}
+
+	int count = built_skeleton->get_bone_count();
+	Vector<Vector<int>> children;
+	children.resize(count);
+	Vector<int> roots;
+	for (int i = 0; i < count; i++) {
+		int parent = built_skeleton->get_bone_parent(i);
+		if (parent < 0) {
+			roots.push_back(i);
+		} else {
+			children.write[parent].push_back(i);
+		}
+	}
+
+	String out;
+	for (int i = 0; i < roots.size(); i++) {
+		_append_bone_tree(built_skeleton, children, roots[i], 0, out);
+	}
+	return out;
+}
+
 int FbxScene::get_animation_count() const {
 	return scene ? (int)scene->anim_stacks.count : 0;
 }
@@ -249,40 +290,54 @@ Ref<Animation> FbxScene::load_animation(int p_index, double p_fps, Skeleton3D *p
 	// short of the final frame, e.g. a 1s/30fps clip needs samples at frame 30 too, not just 0..29).
 	int frame_count = length > 0.0 ? (int)std::ceil(length * fps) + 1 : 1;
 
+	// "Is this node a real bone?" - must agree with the Skeleton3D the animation is played
+	// against, so membership in p_target_skeleton (by sanitized name) is the authority whenever
+	// one was given. ufbx's `bone` flag alone disagrees with build_skeleton_bones(), which also
+	// takes any node referenced as a skin cluster's bone_node: some exporters skin against plain
+	// transform nodes that never get an FBX "Skeleton" attribute, so those joints end up in the
+	// Skeleton3D with a rest pose but would get no track here - frozen at rest while their
+	// children's tracks were baked assuming they moved. Only with no target skeleton (an
+	// animation-only export, e.g. Mixamo "without skin", which has no mesh/skin deformer to
+	// derive bones from) do we fall back to the `bone` attribute alone.
+	auto is_real_bone = [&](const ufbx_node *p_node) {
+		if (p_target_skeleton == nullptr) {
+			return p_node->bone != nullptr;
+		}
+		String name = sanitize_bone_name(String::utf8(p_node->name.data, (int)p_node->name.length));
+		return p_target_skeleton->find_bone(name) >= 0;
+	};
+
 	for (size_t i = 0; i < scene->nodes.count; i++) {
 		ufbx_node *node = scene->nodes.data[i];
-		// Gated on the node's own bone attribute rather than skin-cluster membership (unlike
-		// build_skeleton_bones()): an animation-only export (e.g. Mixamo "without skin") has no
-		// mesh/skin deformer to derive bones from, just the bone hierarchy itself.
-		if (!node->bone) {
+		if (!is_real_bone(node)) {
 			continue;
 		}
 
 		// Skeleton3D interprets a bone's pose track as relative to its *parent bone*, skipping
 		// any non-bone nodes in between (matching how build_skeleton_bones() sets up
 		// set_bone_rest()) - most bones have a real skeleton bone as their immediate parent so
-		// this is empty, but the topmost bone(s) hang off the scene root, which carries ufbx's
-		// UFBX_SPACE_CONVERSION_TRANSFORM_ROOT axis/unit conversion (see FbxManager::load_scene).
-		// Skipping this chain (as a flat per-node bake would) leaves that conversion's unit scale
-		// out of the baked translation keys, which - since a static rest pose and an animated
-		// pose then disagree on scale only where they differ from each other - is invisible at
-		// the rest frame but throws the bone (and everything skinned to it) wildly out of place
-		// the instant the animation moves it off rest.
+		// this is empty. The walk stops at the nearest ancestor that is itself a real bone, using
+		// the exact same test as the track-creation gate above - the two must agree, or a node can
+		// be both skipped (no track of its own, so frozen at rest) and treated as a stopping point
+		// (so its child's track is baked as if it moved), and the mismatch compounds down the
+		// chain. Ancestors that aren't real bones - e.g. a "root" control node above the topmost
+		// skinned bone that carries no skin weight and so never made it into
+		// build_skeleton_bones()'s Skeleton3D - are composed through instead, matching how the
+		// child's rest pose is expressed relative to the skeleton root.
 		//
-		// An ancestor only stops the walk if it's an actual bone in p_target_skeleton (when one
-		// was given) - ufbx's `bone` flag alone isn't enough, since rigs commonly have a "root"
-		// control bone above the topmost *skinned* bone that carries no skin weight and so never
-		// made it into build_skeleton_bones()'s Skeleton3D; treating it as a stopping point would
-		// bake the skinned bone below it relative to a parent that doesn't exist in the target
-		// skeleton, instead of relative to the skeleton root like its rest pose is.
+		// Deliberately never climbs past scene->root_node - that node carries ufbx's
+		// UFBX_SPACE_CONVERSION_TRANSFORM_ROOT axis/unit conversion (see FbxManager::load_scene),
+		// which build_skeleton_bones() also excludes from bone rest for the same reason
+		// (fbx_convert.cpp's build_skeleton_bones() comment has the full explanation): that
+		// conversion is applied exactly once, via the Node3D transform FbxScene::import() sets on
+		// its returned root. Composing it a second time in here used to be invisible for a static
+		// pose (skin deformation is pose * rest^-1, and a shared scale error in both cancels in
+		// that ratio at bind pose) but broke skinning the instant a bone rotated away from rest,
+		// since the mismatch no longer cancels once pose and rest diverge.
 		Vector<ufbx_node *> pending_chain;
-		for (ufbx_node *ancestor = node->parent; ancestor; ancestor = ancestor->parent) {
-			if (ancestor->bone) {
-				String ancestor_name = sanitize_bone_name(String::utf8(ancestor->name.data, (int)ancestor->name.length));
-				bool is_real_bone = p_target_skeleton == nullptr || p_target_skeleton->find_bone(ancestor_name) >= 0;
-				if (is_real_bone) {
-					break;
-				}
+		for (ufbx_node *ancestor = node->parent; ancestor && ancestor != scene->root_node; ancestor = ancestor->parent) {
+			if (is_real_bone(ancestor)) {
+				break;
 			}
 			pending_chain.push_back(ancestor);
 		}
@@ -332,6 +387,7 @@ void FbxScene::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("load_skeleton"), &FbxScene::load_skeleton);
 	ClassDB::bind_method(D_METHOD("has_skeleton"), &FbxScene::has_skeleton);
 	ClassDB::bind_method(D_METHOD("get_skeleton"), &FbxScene::get_skeleton);
+	ClassDB::bind_method(D_METHOD("debug_skeleton_hierarchy"), &FbxScene::debug_skeleton_hierarchy);
 	ClassDB::bind_method(D_METHOD("import"), &FbxScene::import);
 	ClassDB::bind_method(D_METHOD("get_animation_count"), &FbxScene::get_animation_count);
 	ClassDB::bind_method(D_METHOD("get_animation_names"), &FbxScene::get_animation_names);
