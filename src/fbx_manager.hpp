@@ -11,6 +11,7 @@
 using namespace godot;
 
 class FbxScene;
+class FbxSceneWriter;
 
 class FbxManager : public RefCounted {
 	GDCLASS(FbxManager, RefCounted)
@@ -50,6 +51,12 @@ public:
 	// build geometry/materials, then call FbxScene::import() to assemble the final tree.
 	// Returns a null Ref on failure (prints the ufbx error via UtilityFunctions::printerr).
 	Ref<FbxScene> load_scene(const String &p_path) const;
+
+	// Creates a fresh, empty in-memory FBX scene to build up via FbxSceneWriter's set_mesh() /
+	// set_uv() / set_normal() / set_material() / set_skeleton() / set_skin(), then write out with
+	// export_scene(). Pure in-memory construction - no file or ufbx parsing involved, unlike every
+	// other method here.
+	Ref<FbxSceneWriter> new_scene() const;
 
 private:
 	Node3D *_build_node(ufbx_node *p_node, const String &p_fbx_dir) const;

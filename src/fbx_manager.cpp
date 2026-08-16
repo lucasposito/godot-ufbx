@@ -3,6 +3,7 @@
 #include "fbx_convert.hpp"
 #include "fbx_mesh_entry.hpp"
 #include "fbx_scene.hpp"
+#include "fbx_scene_writer.hpp"
 
 #include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
@@ -139,6 +140,12 @@ Ref<FbxScene> FbxManager::load_scene(const String &p_path) const {
 	return fbx_scene;
 }
 
+Ref<FbxSceneWriter> FbxManager::new_scene() const {
+	Ref<FbxSceneWriter> writer;
+	writer.instantiate();
+	return writer;
+}
+
 Node3D *FbxManager::_build_node(ufbx_node *p_node, const String &p_fbx_dir) const {
 	Node3D *node = nullptr;
 
@@ -173,4 +180,5 @@ void FbxManager::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_mesh_data", "path", "mesh_index"), &FbxManager::get_mesh_data);
 	ClassDB::bind_method(D_METHOD("get_material_data", "path", "mesh_index"), &FbxManager::get_material_data);
 	ClassDB::bind_method(D_METHOD("load_scene", "path"), &FbxManager::load_scene);
+	ClassDB::bind_method(D_METHOD("new_scene"), &FbxManager::new_scene);
 }

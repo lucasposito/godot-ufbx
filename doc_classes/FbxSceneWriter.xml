@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="FbxSceneWriter" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="export_scene">
+			<return type="bool" />
+			<param index="0" name="path" type="String" />
+			<param index="1" name="binary" type="bool" default="true" />
+			<description>
+			</description>
+		</method>
+		<method name="set_material">
+			<return type="void" />
+			<param index="0" name="mesh_index" type="int" />
+			<param index="1" name="material" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="set_mesh">
+			<return type="int" />
+			<param index="0" name="geometry" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="set_normal">
+			<return type="void" />
+			<param index="0" name="mesh_index" type="int" />
+			<param index="1" name="normal" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="set_skeleton">
+			<return type="void" />
+			<param index="0" name="skeleton" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="set_skin">
+			<return type="void" />
+			<param index="0" name="mesh_index" type="int" />
+			<param index="1" name="skin" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="set_uv">
+			<return type="void" />
+			<param index="0" name="mesh_index" type="int" />
+			<param index="1" name="uv" type="Dictionary" />
+			<description>
+			</description>
+		</method>
+	</methods>
+</class>

@@ -39,5 +39,10 @@
 			<description>
 			</description>
 		</method>
+		<method name="new_scene" qualifiers="const">
+			<return type="FbxSceneWriter" />
+			<description>
+			</description>
+		</method>
 	</methods>
 </class>

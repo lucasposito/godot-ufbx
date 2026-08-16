@@ -2,6 +2,7 @@
 #include "fbx_manager.hpp"
 #include "fbx_mesh_entry.hpp"
 #include "fbx_scene.hpp"
+#include "fbx_scene_writer.hpp"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
@@ -19,6 +20,7 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	// Register your classes here, so they are available in the Godot editor and engine
 	GDREGISTER_CLASS(FbxMeshEntry)
 	GDREGISTER_CLASS(FbxScene)
+	GDREGISTER_CLASS(FbxSceneWriter)
 	GDREGISTER_CLASS(FbxManager)
 }
 
