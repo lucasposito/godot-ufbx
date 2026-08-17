@@ -1,1 +1,1 @@
-# FBX Importer/Exporter Plugin
+# Godot FBX Importer/Exporter Addon
