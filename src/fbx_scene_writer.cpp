@@ -974,13 +974,30 @@ bool FbxSceneWriter::export_scene(String p_path, bool p_binary) const {
 				Dictionary default_normals = compute_default_normals(mesh.vertices, mesh.indices, mesh.faces);
 				Vector<double> normal_flat;
 				normal_flat.resize(mesh.indices.size() * 3);
+				// mesh.normals[v] is an Array of one normal per corner that touched control point v
+				// at read time (see read_normal_data() in fbx_convert.cpp), in the order those
+				// corners were encountered walking the source mesh's faces. mesh.indices/mesh.faces
+				// below were captured from that exact same corner traversal (ufbx shares one index
+				// space across every vertex attribute), so re-walking them here in order and taking
+				// the Nth occurrence of v as the Nth entry of mesh.normals[v] reproduces the
+				// original per-corner (hard-edge/split-normal) assignment without needing to match
+				// on face id.
+				Dictionary point_occurrence;
 				for (int corner = 0; corner < mesh.indices.size(); corner++) {
 					int v = mesh.indices[corner];
 					Vector3 n;
+					bool used_override = false;
 					if (mesh.has_normal_override && mesh.normals.has(v)) {
-						Vector3 given = mesh.normals[v];
-						n = given.length_squared() > 0.0 ? given.normalized() : Vector3(0, 1, 0);
-					} else if (v >= 0 && v < mesh.vertices.size()) {
+						Array corner_normals = mesh.normals[v];
+						int occurrence = point_occurrence.has(v) ? (int)point_occurrence[v] : 0;
+						point_occurrence[v] = occurrence + 1;
+						if (occurrence < corner_normals.size()) {
+							Vector3 given = corner_normals[occurrence];
+							n = given.length_squared() > 0.0 ? given.normalized() : Vector3(0, 1, 0);
+							used_override = true;
+						}
+					}
+					if (!used_override && v >= 0 && v < mesh.vertices.size()) {
 						n = default_normals[v];
 					}
 					normal_flat.write[corner * 3] = n.x;

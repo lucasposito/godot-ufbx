@@ -38,7 +38,7 @@ class FbxSceneWriter : public RefCounted {
 		Array uv_indices; // One sub-array per polygon, corner -> uv_vertices index.
 
 		bool has_normal_override = false; // set_normal() was called for this mesh.
-		Dictionary normals; // control-point index (int) -> Vector3, explicit or computed default.
+		Dictionary normals; // control-point index (int) -> Array[Vector3], one entry per corner that touched that point (see the ByPolygonVertex write loop for how these get matched back to corners).
 
 		PackedStringArray materials; // Defaults to a single "DefaultMaterial".
 		Dictionary material_paths; // material name -> {"DiffuseColor": path, "NormalMap": path}.

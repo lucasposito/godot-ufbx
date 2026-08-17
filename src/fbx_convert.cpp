@@ -630,29 +630,41 @@ Dictionary read_normal_data(ufbx_mesh *p_mesh) {
 	data["geometry"] = String::utf8(p_mesh->name.data, (int)p_mesh->name.length);
 
 	Dictionary normals;
+	Array faces;
 	if (p_mesh->vertex_normal.exists) {
-		Vector<Vector3> accum;
-		accum.resize((int)p_mesh->num_vertices);
-		for (int i = 0; i < accum.size(); i++) {
-			accum.write[i] = Vector3();
+		// One entry per face-corner touching each control point, NOT averaged into a single
+		// blended vector - a hard/split edge legitimately has a different normal per adjacent
+		// face for the same control point, and collapsing those into one value silently smooths
+		// every hard edge away. Mirrors MayaData's normal.py get() (MItMeshVertex.getNormals()/
+		// getConnectedFaces()): "normals"[control_point] is an Array of per-corner Vector3s, and
+		// the parallel top-level "faces" array (same iteration order as "normals") holds the
+		// originating face index for each of those entries.
+		Vector<Array> per_point_normals;
+		Vector<Array> per_point_faces;
+		per_point_normals.resize((int)p_mesh->num_vertices);
+		per_point_faces.resize((int)p_mesh->num_vertices);
+
+		for (size_t face_i = 0; face_i < p_mesh->faces.count; face_i++) {
+			ufbx_face face = p_mesh->faces.data[face_i];
+			for (uint32_t corner = face.index_begin; corner < face.index_begin + face.num_indices; corner++) {
+				// Same array ufbx_get_vertex_vec3 uses internally for vertex_position - see the
+				// note on this same substitution in build_mesh_geometry's skin pass.
+				uint32_t control_point = p_mesh->vertex_position.indices.data[corner];
+				ufbx_vec3 n = ufbx_get_vertex_vec3(&p_mesh->vertex_normal, corner);
+				per_point_normals.write[(int)control_point].push_back(Vector3(n.x, n.y, n.z));
+				per_point_faces.write[(int)control_point].push_back((int32_t)face_i);
+			}
 		}
 
-		for (size_t corner = 0; corner < p_mesh->num_indices; corner++) {
-			// Same array ufbx_get_vertex_vec3 uses internally for vertex_position - see the
-			// note on this same substitution in build_mesh_geometry's skin pass.
-			uint32_t control_point = p_mesh->vertex_position.indices.data[corner];
-			ufbx_vec3 n = ufbx_get_vertex_vec3(&p_mesh->vertex_normal, corner);
-			accum.write[(int)control_point] += Vector3(n.x, n.y, n.z);
-		}
-
-		for (int i = 0; i < accum.size(); i++) {
-			if (accum[i].length_squared() > 0.0) {
-				normals[i] = accum[i];
+		for (int i = 0; i < per_point_normals.size(); i++) {
+			if (!per_point_normals[i].is_empty()) {
+				normals[i] = per_point_normals[i];
+				faces.push_back(per_point_faces[i]);
 			}
 		}
 	}
 	data["normals"] = normals;
-	data["faces"] = Array();
+	data["faces"] = faces;
 
 	return data;
 }
