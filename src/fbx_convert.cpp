@@ -630,15 +630,15 @@ Dictionary read_normal_data(ufbx_mesh *p_mesh) {
 	data["geometry"] = String::utf8(p_mesh->name.data, (int)p_mesh->name.length);
 
 	Dictionary normals;
-	Array faces;
+	Dictionary faces;
 	if (p_mesh->vertex_normal.exists) {
 		// One entry per face-corner touching each control point, NOT averaged into a single
 		// blended vector - a hard/split edge legitimately has a different normal per adjacent
 		// face for the same control point, and collapsing those into one value silently smooths
 		// every hard edge away. Mirrors MayaData's normal.py get() (MItMeshVertex.getNormals()/
 		// getConnectedFaces()): "normals"[control_point] is an Array of per-corner Vector3s, and
-		// the parallel top-level "faces" array (same iteration order as "normals") holds the
-		// originating face index for each of those entries.
+		// "faces"[control_point] (SAME key, not a positionally-parallel array - see below) holds
+		// the originating face index for each of those entries.
 		Vector<Array> per_point_normals;
 		Vector<Array> per_point_faces;
 		per_point_normals.resize((int)p_mesh->num_vertices);
@@ -659,11 +659,17 @@ Dictionary read_normal_data(ufbx_mesh *p_mesh) {
 		for (int i = 0; i < per_point_normals.size(); i++) {
 			if (!per_point_normals[i].is_empty()) {
 				normals[i] = per_point_normals[i];
-				faces.push_back(per_point_faces[i]);
+				faces[i] = per_point_faces[i];
 			}
 		}
 	}
 	data["normals"] = normals;
+	// Keyed by the SAME control-point index as "normals", not a plain array positionally
+	// parallel to it: JSON.stringify() on the Godot/consumer side re-sorts Dictionary keys as
+	// strings ("0","1","10","100",...), which desyncs any positional pairing with a separate
+	// array the instant a control-point index needs more than one digit. Keying "faces" the
+	// same way survives that reordering since both dicts get sorted identically and every
+	// lookup is by explicit key, not position.
 	data["faces"] = faces;
 
 	return data;
